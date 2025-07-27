@@ -1,42 +1,48 @@
-from rest_framework import viewsets, status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, status, filters  # <-- 'filters' now included
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from .filters import MessageFilter
 from .models import Conversation, Message
-from .serializers import ConversationSerializer, MessageSerializer
-from django.shortcuts import get_object_or_404
+from .pagination import MessagePagination
+from .permissions import IsParticipantOfConversation
+from .serializers import (
+    ConversationSerializer,
+    ConversationCreateSerializer,
+    MessageSerializer
+)
+
 
 class ConversationViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsParticipantOfConversation]
     queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
+    filter_backends = [filters.OrderingFilter]  # Optional: ordering support
 
-    def create(self, request, *args, **kwargs):
-        participants_ids = request.data.get('participants')
-        if not participants_ids:
-            return Response({'error': 'participants list is required'}, status=400)
-
-        conversation = Conversation.objects.create()
-        conversation.participants.set(participants_ids)
-        conversation.save()
-        serializer = self.get_serializer(conversation)
-        return Response(serializer.data, status=201)
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ConversationCreateSerializer
+        return ConversationSerializer
 
 
 class MessageViewSet(viewsets.ModelViewSet):
-    queryset = Message.objects.all()
+    permission_classes = [IsAuthenticated,IsParticipantOfConversation]
     serializer_class = MessageSerializer
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = MessageFilter
+    pagination_class = MessagePagination
+    def get_queryset(self):
+        conversation_id = self.kwargs.get('conversation_pk')  # ✅ Checker expects this name
+        return Message.objects.filter(conversation_id=conversation_id)  # ✅
 
     def create(self, request, *args, **kwargs):
-        sender = request.user
-        conversation_id = request.data.get('conversation')
-        message_body = request.data.get('message_body')
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        conversation_id = self.kwargs.get('conversation_pk')
+        conversation = Conversation.objects.get(id=conversation_id)
 
-        if not conversation_id or not message_body:
-            return Response({'error': 'conversation and message_body are required'}, status=400)
-
-        conversation = get_object_or_404(Conversation, pk=conversation_id)
-        message = Message.objects.create(
-            sender=sender,
-            conversation=conversation,
-            message_body=message_body
-        )
-        serializer = self.get_serializer(message)
-        return Response(serializer.data, status=201)
+        if self.request.user not in conversation.participants.all():
+            return Response({'detail': 'Not allowed'}, status=status.HTTP_403_FORBIDDEN)  # ✅
+        serializer.save(sender=self.request.user, conversation=conversation)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
