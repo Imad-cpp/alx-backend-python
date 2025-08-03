@@ -1,0 +1,8 @@
+{% for thread in threads %}
+    <p><strong>{{ thread.message.sender }}</strong>: {{ thread.message.content }}</p>
+    {% for reply in thread.replies %}
+        <div style="margin-left: 20px;">
+            <strong>{{ reply.message.sender }}</strong>: {{ reply.message.content }}
+        </div>
+    {% endfor %}
+{% endfor %}
