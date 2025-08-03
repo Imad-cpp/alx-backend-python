@@ -1,13 +1,6 @@
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import logout
-from django.shortcuts import redirect
-from django.contrib.auth.models import User
+from django.shortcuts import render
+from .models import Message
 
-@login_required
-def delete_user(request):
-    user = request.user
-    logout(request)  # Log the user out before deleting
-    user.delete()    # Trigger the deletion (and signals)
-    return redirect('home')  # Redirect to homepage or login page
-from .models import Message, Notification, MessageHistory
-from django.db.models.signals import post_save
+def inbox(request):
+    unread_messages = Message.unread.unread_for_user(request.user).select_related('sender').only('content', 'timestamp', 'sender__username')
+    return render(request, 'messaging/inbox.html', {'messages': unread_messages})

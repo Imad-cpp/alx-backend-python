@@ -1,8 +1,6 @@
+# messaging/admin.py
+
 from django.contrib import admin
-from .models import Message, Notification, MessageHistory
+from .models import Message
 
 admin.site.register(Message)
-admin.site.register(Notification)
-admin.site.register(MessageHistory)
-from django.db.models.signals import post_save
-from django.dispatch import receiver
