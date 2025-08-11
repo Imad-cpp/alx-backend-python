@@ -1,40 +1,42 @@
 from rest_framework import serializers
-from .models import User, Message, Conversation
-
-class MessageSerializer(serializers.ModelSerializer):
-    message_body = serializers.CharField()  # Explicitly use CharField to satisfy checker
-
-    class Meta:
-        model = Message
-        fields = [
-            'message_id',
-            'sender',
-            'conversation',
-            'message_body',
-            'sent_at'
-        ]
-        read_only_fields = ['message_id', 'sent_at']
+from .models import User, Conversation, Message
 
 
 class UserSerializer(serializers.ModelSerializer):
-    full_name = serializers.SerializerMethodField()  # Required by checker
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone_number = serializers.CharField(required=False)
 
     class Meta:
         model = User
-        fields = [
-            'user_id',
-            'email',
-            'first_name',
-            'last_name',
-            'phone_number',
-            'role',
-            'created_at',
-            'full_name'  # Include SerializerMethodField in output
-        ]
-        read_only_fields = ['user_id', 'created_at']
+        fields = ['user_id',
+                  'username',
+                  'email',
+                  'first_name',
+                  'last_name',
+                  'phone_number']
 
-    def get_full_name(self, obj):
-        return f"{obj.first_name} {obj.last_name}"
+
+class MessageSerializer(serializers.ModelSerializer):
+    message_body = serializers.CharField()
+    sender_username = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ['message_id',
+                  'sender',
+                  'sender_username',
+                  'conversation',
+                  'message_body',
+                  'sent_at']
+
+    def get_sender_username(self, obj):
+        return obj.sender.username
+
+    def validate_message_body(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Message body cannot be empty.")
+        return value
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -43,28 +45,4 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Conversation
-        fields = [
-            'conversation_id',
-            'participants',
-            'messages',
-            'created_at'
-        ]
-        read_only_fields = ['conversation_id', 'created_at']
-
-
-class ConversationCreateSerializer(serializers.ModelSerializer):
-    participant_ids = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=User.objects.all(),
-        source='participants'
-    )
-
-    class Meta:
-        model = Conversation
-        fields = ['conversation_id', 'participant_ids', 'created_at']
-        read_only_fields = ['conversation_id', 'created_at']
-
-    def validate_participant_ids(self, value):
-        if len(value) < 2:
-            raise serializers.ValidationError("A conversation must include at least two participants.")
-        return value
+        fields = ['conversation_id', 'participants', 'messages', 'created_at']
